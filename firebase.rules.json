@@ -5,30 +5,14 @@
     "games": {
       "$room": {
         ".read": "auth != null && $room.matches(/^[A-Z0-9_-]{1,12}$/)",
+        "meta": {
+          ".write": "auth != null && $room.matches(/^[A-Z0-9_-]{1,12}$/)",
+          ".validate": "newData.val() == null || (newData.hasChildren(['round', 'phase', 'events']) && newData.child('round').isNumber() && newData.child('round').val() >= 1 && newData.child('round').val() <= 3 && newData.child('phase').isString() && newData.child('phase').val().matches(/^(planning|reveal|finished)$/))"
+        },
         "teams": {
           "$team": {
-            ".write": "auth != null && $room.matches(/^[A-Z0-9_-]{1,12}$/) && $team.matches(/^[A-Za-z0-9_-]{1,32}$/)",
-            ".validate": "newData.hasChild('used')",
-            "used": {
-              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
-            },
-            "cards": {
-              "$card": {
-                ".validate": "$card.matches(/^[A-Za-z0-9_-]{1,64}$/) && newData.hasChildren(['x', 'y'])",
-                "x": {
-                  ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
-                },
-                "y": {
-                  ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
-                },
-                "$other": {
-                  ".validate": false
-                }
-              }
-            },
-            "$other": {
-              ".validate": false
-            }
+            ".write": "auth != null && $room.matches(/^[A-Z0-9_-]{1,12}$/) && $team.matches(/^team[1-4]$/)",
+            ".validate": "newData.val() == null || newData.hasChildren(['roles', 'decisions', 'submitted'])"
           }
         },
         "$other": {
