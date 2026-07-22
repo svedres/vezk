@@ -7,12 +7,76 @@
         ".read": "auth != null && $room.matches(/^[A-Z0-9_-]{1,12}$/)",
         "meta": {
           ".write": "auth != null && $room.matches(/^[A-Z0-9_-]{1,12}$/)",
-          ".validate": "newData.val() == null || (newData.hasChildren(['round', 'phase', 'events']) && newData.child('round').isNumber() && newData.child('round').val() >= 1 && newData.child('round').val() <= 3 && newData.child('phase').isString() && newData.child('phase').val().matches(/^(planning|reveal|finished)$/))"
+          ".validate": "newData.val() == null || newData.hasChildren(['round', 'phase', 'events'])",
+          "round": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3"
+          },
+          "phase": {
+            ".validate": "newData.isString() && newData.val().matches(/^(planning|reveal|finished)$/)"
+          },
+          "events": {
+            "$round": {
+              ".validate": "$round.matches(/^[1-3]$/) && newData.isString() && newData.val().matches(/^(none|capacity_cut|public_attention|deadline_wave|partner_offer|system_window|legal_review|staff_absence)$/)"
+            }
+          },
+          "updatedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
         },
         "teams": {
           "$team": {
             ".write": "auth != null && $room.matches(/^[A-Z0-9_-]{1,12}$/) && $team.matches(/^team[1-4]$/)",
-            ".validate": "newData.val() == null || newData.hasChildren(['roles', 'decisions', 'submitted'])"
+            "roles": {
+              "leader": {
+                ".validate": "newData.isString() && newData.val().length <= 80"
+              },
+              "student": {
+                ".validate": "newData.isString() && newData.val().length <= 80"
+              },
+              "rules": {
+                ".validate": "newData.isString() && newData.val().length <= 80"
+              },
+              "system": {
+                ".validate": "newData.isString() && newData.val().length <= 80"
+              },
+              "comms": {
+                ".validate": "newData.isString() && newData.val().length <= 80"
+              },
+              "$other": {
+                ".validate": false
+              }
+            },
+            "note": {
+              ".validate": "newData.isString() && newData.val().length <= 4000"
+            },
+            "decisions": {
+              "$case": {
+                ".validate": "$case.matches(/^[A-Za-z0-9_-]{1,64}$/) && newData.hasChildren(['mode', 'round'])",
+                "mode": {
+                  ".validate": "newData.isString() && newData.val().matches(/^(resolve|stabilize|delegate|defer)$/)"
+                },
+                "round": {
+                  ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 3"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            },
+            "submitted": {
+              "$round": {
+                ".validate": "$round.matches(/^[1-3]$/) && newData.isBoolean()"
+              }
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
         "$other": {
