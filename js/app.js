@@ -617,6 +617,13 @@ function renderPlayer() {
   const used = usedCapacity(playerState, playerMeta);
   $("#capacityMax").textContent = max;
   $("#capacityLeft").textContent = Math.max(0, max - used);
+  const barFill = $("#capacityBarFill");
+  const bar = $(".capacity-bar");
+  if (barFill && bar) {
+    const ratio = max > 0 ? Math.min(1, used / max) : (used > 0 ? 1 : 0);
+    barFill.style.width = `${Math.round(ratio * 100)}%`;
+    bar.classList.toggle("over", used > max);
+  }
   renderEventBanner($("#eventBanner"), currentEvent(playerMeta));
   syncRoleFields();
   renderCaseHand();
@@ -1178,6 +1185,7 @@ async function main() {
     goMaster();
   });
   $("#rulesBtn").addEventListener("click", openRules);
+  $("#helpBtn").addEventListener("click", openRules);
   $$('[data-close-rules]').forEach((item) => item.addEventListener("click", closeRules));
   $$('[data-close-modal]').forEach((item) => item.addEventListener("click", closeModal));
   $$('[data-back]').forEach((button) => button.addEventListener("click", goHome));
@@ -1205,6 +1213,15 @@ async function main() {
   } else {
     showView("view-home");
   }
+
+  // Első látogatáskor automatikusan felugrik a „Hogyan kell játszani?” útmutató.
+  // Utána a fejléc ? gombjával bármikor újra megnyitható.
+  try {
+    if (!localStorage.getItem("vezk-onboarded")) {
+      localStorage.setItem("vezk-onboarded", "1");
+      if (role !== "master") openRules();
+    }
+  } catch (_) { /* privát böngészés: az útmutató a ? gombbal így is elérhető */ }
 }
 
 main();

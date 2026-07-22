@@ -17,7 +17,10 @@
         <p>Dönts bizonytalanságban. Vállald a következményt.</p>
       </div>
     </div>
-    <span id="rtBadge" class="rt-badge" title="Valós idejű kapcsolat állapota" aria-live="polite">…</span>
+    <div class="topbar-actions">
+      <button id="helpBtn" class="help-btn" type="button" aria-label="Hogyan kell játszani?" title="Hogyan kell játszani?">?</button>
+      <span id="rtBadge" class="rt-badge" title="Valós idejű kapcsolat állapota" aria-live="polite">…</span>
+    </div>
   </header>
 
   <main>
@@ -43,11 +46,12 @@
             />
           </label>
 
+          <p class="home-hint">Egy ember a <b>játékmester</b>, a többiek <b>csapatként</b> lépnek be. Mindenki <b>ugyanazt a szobakódot</b> írja be, hogy egy játékban legyetek.</p>
           <div class="home-actions">
             <button id="startBtn" class="big-btn" type="button">Csapatként belépek</button>
             <button id="masterBtn" class="secondary-btn" type="button">Játékmesteri felület</button>
           </div>
-          <button id="rulesBtn" class="link-btn" type="button">Gyors játékszabályok megnyitása</button>
+          <button id="rulesBtn" class="link-btn help-link" type="button">Hogyan kell játszani? →</button>
         </article>
 
         <aside class="hero-side" aria-label="A játék fő elemei">
@@ -87,6 +91,7 @@
         <div class="capacity-box" aria-live="polite">
           <span>Szabad kapacitás</span>
           <b id="capacityLeft">12</b><small>/ <span id="capacityMax">12</span></small>
+          <div class="capacity-bar"><i id="capacityBarFill"></i></div>
         </div>
         <button class="back-btn small" data-back type="button">Kilépés</button>
       </div>
@@ -174,16 +179,43 @@
     <div class="modal-backdrop" data-close-rules></div>
     <article class="modal-card rules-card" role="dialog" aria-modal="true" aria-labelledby="rulesTitle">
       <button class="modal-close" data-close-rules type="button" aria-label="Bezárás">×</button>
-      <span class="eyebrow">Gyors szabályok</span>
-      <h2 id="rulesTitle">A játék menete öt lépésben</h2>
+      <span class="eyebrow">Útmutató</span>
+      <h2 id="rulesTitle">Hogyan kell játszani?</h2>
+      <p class="rules-goal">Nem tudtok minden ügyet megoldani — <b>korlátozott kapacitásból</b> kell olyan döntési csomagot összeraknotok, amit vezetőként meg tudtok indokolni. A cél nem a maximális pontszám, hanem a <b>következetes, védhető döntés</b>.</p>
+
+      <div class="rules-roles">
+        <div class="rules-role">
+          <span class="rr-icon">◆</span>
+          <div><b>1 játékmester</b><small>Vezeti a fordulókat, eseményt dob be, és felfedi a következményeket.</small></div>
+        </div>
+        <div class="rules-role">
+          <span class="rr-icon">◎</span>
+          <div><b>2–4 csapat</b><small>Mindegyik más szakterületet kap, és nem látja a többiek tábláját.</small></div>
+        </div>
+        <div class="rules-role">
+          <span class="rr-icon">#</span>
+          <div><b>Közös szobakód</b><small>Mindenki ugyanazt a kódot írja be, hogy egy játékban legyetek.</small></div>
+        </div>
+      </div>
+
+      <h3 class="rules-subhead">Minden ügynél négy döntés közül választotok</h3>
+      <div class="rules-modes">
+        <div class="rm"><b>✓ Azonnal megoldjuk</b><span>Teljes költség · tartós megoldás</span></div>
+        <div class="rm"><b>⏱ Stabilizáljuk</b><span>Kb. fél költség · időt nyertek</span></div>
+        <div class="rm"><b>⇄ Delegáljuk</b><span>1 pont · koordinációs kockázat</span></div>
+        <div class="rm"><b>! Vállaljuk a kockázatot</b><span>0 pont · marad a következmény</span></div>
+      </div>
+
+      <h3 class="rules-subhead">A forduló menete</h3>
       <ol class="rules-list">
-        <li><b>Osszátok ki a szerepeket.</b> Mindenki más vezetői szempontot képvisel.</li>
-        <li><b>Értelmezzétek az eseményt.</b> A forduló külső nyomása módosíthatja a kapacitást vagy a következményeket.</li>
-        <li><b>Helyezzétek el az ügyeket.</b> Azonnali megoldás, stabilizálás, delegálás vagy vállalt kockázat.</li>
-        <li><b>Véglegesítsétek a portfóliót.</b> Ne csak egy-egy ügyet, hanem a teljes döntési csomagot indokoljátok.</li>
-        <li><b>Reflektáljatok.</b> A játékmester felfedi a modell szerinti hatásokat; ezek vitaindítók, nem egyetlen „helyes válasz”.</li>
+        <li><b>Osszátok ki a szerepeket</b>, és nézzétek meg a forduló eseményét — az módosíthatja a keretet vagy egyes döntések hatását.</li>
+        <li><b>Húzzátok az ügyeket</b> a négy döntési zóna egyikébe (telefonon kattints a kártyára). A szabad kapacitás fogy, a keret fölé nem mehettek.</li>
+        <li><b>Véglegesítsétek</b> a teljes döntési csomagot. A ki nem osztott ügyek automatikusan a „Vállaljuk a kockázatot” zónába kerülnek.</li>
+        <li><b>Nézzétek meg a következményeket</b>, amikor a játékmester felfedi őket — ezek vitaindítók, nem egyetlen „helyes válasz”.</li>
       </ol>
-      <p class="helper">Részletes forgatókönyv és feldolgozási kérdések a csomag <code>JATEKMESTER_UTMUTATO.md</code> fájljában találhatók.</p>
+
+      <p class="helper">Ezt az útmutatót bármikor újra megnyithatod a fejléc <b>?</b> gombjával.</p>
+      <button class="big-btn rules-start-btn" data-close-rules type="button">Értem, kezdjük!</button>
     </article>
   </div>
 
