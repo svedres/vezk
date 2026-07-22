@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="description" content="Mana Clash — a real-time team card game." />
+  <title>Mana Clash</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="gameTitle">Mana Clash</h1>
+    <span id="rtBadge" class="rt-badge" title="Realtime status" aria-live="polite">…</span>
+  </header>
+
+  <main>
+    <!-- ============ HOME ============ -->
+    <section id="view-home" class="view active">
+      <div class="home-box">
+        <p class="tagline">Distribute your mana. Outsmart the other teams.</p>
+        <label class="room-field">
+          Room code
+          <input
+            id="roomInput"
+            value="MAIN"
+            maxlength="12"
+            pattern="[A-Za-z0-9_-]{1,12}"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+          />
+        </label>
+        <button id="startBtn" class="big-btn">Let's Start</button>
+        <button id="masterBtn" class="link-btn">I'm the Game Master →</button>
+      </div>
+    </section>
+
+    <!-- ============ TEAM SELECT ============ -->
+    <section id="view-team" class="view">
+      <button class="back-btn" data-back>← Back</button>
+      <h2>Choose your team</h2>
+      <div id="teamButtons" class="team-buttons"></div>
+    </section>
+
+    <!-- ============ PLAYER GAME ============ -->
+    <section id="view-game" class="view">
+      <div class="game-bar">
+        <span id="gameTeamName" class="team-name"></span>
+        <div class="mana-box">
+          <span class="mana-icon">✦</span>
+          <b id="manaLeft">10</b> / <span id="manaMax">10</span> mana left
+        </div>
+        <button class="back-btn small" data-back>Leave</button>
+      </div>
+      <div id="field" class="field">
+        <div class="field-label">BATTLEFIELD — drag cards up here</div>
+      </div>
+      <div class="hand-wrap">
+        <div class="hand-label">Your hand</div>
+        <div id="hand" class="hand"></div>
+      </div>
+    </section>
+
+    <!-- ============ GAME MASTER ============ -->
+    <section id="view-master" class="view">
+      <div class="game-bar">
+        <span class="team-name">Game Master · Room <b id="masterRoom"></b></span>
+        <div id="masterTabs" class="tabs"></div>
+        <button class="back-btn small" data-back>Leave</button>
+      </div>
+      <div id="masterContent" class="master-content"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript>This game requires JavaScript.</noscript>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

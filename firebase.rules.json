@@ -1,0 +1,40 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "games": {
+      "$room": {
+        ".read": "auth != null && $room.matches(/^[A-Z0-9_-]{1,12}$/)",
+        "teams": {
+          "$team": {
+            ".write": "auth != null && $room.matches(/^[A-Z0-9_-]{1,12}$/) && $team.matches(/^[A-Za-z0-9_-]{1,32}$/)",
+            ".validate": "newData.hasChild('used')",
+            "used": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10"
+            },
+            "cards": {
+              "$card": {
+                ".validate": "$card.matches(/^[A-Za-z0-9_-]{1,64}$/) && newData.hasChildren(['x', 'y'])",
+                "x": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+                },
+                "y": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}
