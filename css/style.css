@@ -368,6 +368,27 @@ h2 { margin: 7px 0 10px; font-size: clamp(24px, 4vw, 38px); line-height: 1.12; l
 .capacity-bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: width .25s ease, background .2s ease; }
 .capacity-bar.over i { background: var(--bad); }
 
+/* Felhalmozott kockázat mérő */
+.risk-box {
+  min-width: 150px; display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 8px;
+  border: 1px solid var(--line); border-radius: 12px; padding: 8px 11px; background: var(--bg-soft);
+}
+.risk-box > span { grid-column: 1 / -1; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.risk-box b { font-size: 24px; line-height: 1; }
+.risk-box small { color: var(--muted); font-size: 12px; }
+.risk-bar { grid-column: 1 / -1; height: 6px; margin-top: 9px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.risk-bar i { display: block; height: 100%; width: 0; border-radius: 999px; transition: width .25s ease, background .2s ease; }
+.risk-box.level-none b { color: var(--muted); }
+.risk-box.level-none .risk-bar i { background: var(--muted); }
+.risk-box.level-low b, .risk-box.level-low small { color: var(--good); }
+.risk-box.level-low .risk-bar i { background: var(--good); }
+.risk-box.level-mid b, .risk-box.level-mid small { color: var(--warn); }
+.risk-box.level-mid .risk-bar i { background: var(--warn); }
+.risk-box.level-high b, .risk-box.level-high small { color: #fb923c; }
+.risk-box.level-high .risk-bar i { background: #fb923c; }
+.risk-box.level-crit b, .risk-box.level-crit small { color: var(--bad); }
+.risk-box.level-crit .risk-bar i { background: var(--bad); }
+
 .toast {
   position: fixed; z-index: 150; left: 50%; bottom: 22px; transform: translate(-50%, 24px);
   border: 1px solid var(--line); border-radius: 12px; padding: 12px 17px;

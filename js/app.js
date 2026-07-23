@@ -3,6 +3,7 @@ import {
   GAME_TITLE,
   TOTAL_ROUNDS,
   ROUND_CAPACITY,
+  SWAP_ON_EVENT,
   METRIC_LABELS,
   ROLE_LABELS,
   DECISION_MODES,
@@ -41,6 +42,7 @@ const defaultMeta = () => ({
   round: 1,
   phase: "planning",
   events: { 1: "none" },
+  hands: {},
   updatedAt: Date.now(),
 });
 
@@ -56,6 +58,7 @@ const normalizeMeta = (value) => ({
   ...defaultMeta(),
   ...(value || {}),
   events: { ...(value?.events || {}) },
+  hands: { ...(value?.hands || {}) },
 });
 
 const normalizeTeamState = (value) => ({
@@ -168,8 +171,26 @@ function decisionCost(card, modeId, event) {
   return cost;
 }
 
-function roundCases(team, round) {
-  return (CASES[team] || []).filter((card) => card.round === round);
+// ---- Aktív kéz és tartalék kezelése ----
+function baseActiveIds(team, round) {
+  return (CASES[team] || []).filter((card) => card.round === round && !card.reserve).map((card) => card.id);
+}
+function roundPool(team, round) {
+  return (CASES[team] || []).filter((card) => card.round === round).map((card) => card.id);
+}
+function activeIds(meta, round, team) {
+  const hand = meta?.hands?.[round]?.[team];
+  if (hand && typeof hand === "object") {
+    const list = (Array.isArray(hand) ? hand : Object.values(hand)).filter((id) => typeof id === "string" && ALL_CASES[id]);
+    if (list.length) return list;
+  }
+  return baseActiveIds(team, round);
+}
+function activeCases(team, round, meta) {
+  return activeIds(meta, round, team).map((id) => ALL_CASES[id]).filter(Boolean);
+}
+function initialHands(round) {
+  return Object.fromEntries(TEAMS.map((team) => [team.id, baseActiveIds(team.id, round)]));
 }
 
 function roundDecisions(state, round) {
@@ -178,12 +199,53 @@ function roundDecisions(state, round) {
     .map(([cardId, decision]) => ({ cardId, ...decision }));
 }
 
-function usedCapacity(state, meta, round = meta.round) {
+function activeRoundDecisions(state, meta, team, round) {
+  const active = new Set(activeIds(meta, round, team));
+  return roundDecisions(state, round).filter((decision) => active.has(decision.cardId));
+}
+
+function usedCapacity(state, meta, team, round = meta.round) {
   const event = currentEvent(meta, round);
-  return roundDecisions(state, round).reduce((sum, decision) => {
+  return activeRoundDecisions(state, meta, team, round).reduce((sum, decision) => {
     const card = ALL_CASES[decision.cardId];
     return card ? sum + decisionCost(card, decision.mode, event) : sum;
   }, 0);
+}
+
+// ---- Kockázatmodell: itt éreztetik a hatásukat az attribútumok ----
+function riskContribution(card, modeId, event) {
+  let risk;
+  if (modeId === "resolve") risk = 0;
+  else if (modeId === "stabilize") risk = card.systemic >= 2 ? 1 : 0;
+  else if (modeId === "delegate") risk = (card.coordination >= 3 ? 2 : 1) + (card.urgency >= 3 ? 1 : 0);
+  else risk = card.urgency + card.fairness; // Vállalt kockázat: 2..6, a sürgősség és méltányosság súlyozza
+
+  if (event.id === "public_attention" && modeId === "defer") risk += 1;
+  if (event.id === "deadline_wave" && card.urgency >= 3 && modeId !== "resolve") risk += 1;
+  if (event.id === "partner_offer" && modeId === "delegate") risk -= 1;
+  return Math.max(0, risk);
+}
+
+function roundRisk(state, meta, team, round = meta.round) {
+  const event = currentEvent(meta, round);
+  return activeRoundDecisions(state, meta, team, round).reduce((sum, decision) => {
+    const card = ALL_CASES[decision.cardId];
+    return card ? sum + riskContribution(card, decision.mode, event) : sum;
+  }, 0);
+}
+
+function worstRoundRisk(meta, team, round = meta.round) {
+  const event = currentEvent(meta, round);
+  return activeCases(team, round, meta).reduce((sum, card) => sum + riskContribution(card, "defer", event), 0);
+}
+
+function riskLevel(risk, worst) {
+  const ratio = worst > 0 ? risk / worst : 0;
+  if (risk <= 0) return { label: "nincs", cls: "none" };
+  if (ratio < 0.34) return { label: "alacsony", cls: "low" };
+  if (ratio < 0.64) return { label: "közepes", cls: "mid" };
+  if (ratio < 0.9) return { label: "magas", cls: "high" };
+  return { label: "kritikus", cls: "crit" };
 }
 
 function outcomeFor(card, modeId, event) {
@@ -195,35 +257,31 @@ function outcomeFor(card, modeId, event) {
     delta.fairness += card.fairness >= 2 ? 2 : 1;
     delta.stability += card.urgency >= 2 ? 2 : 1;
     delta.learning += card.systemic >= 2 ? 1 : 0;
-    delta.risk -= 2;
     text = card.systemic >= 2
       ? "Érdemi beavatkozás történt, és a csapat a kiváltó okot is kezelni kezdte. Ez erősíti a bizalmat és csökkenti a visszatérés esélyét."
-      : "Az ügy gyors, érdemi kezelést kapott. A közvetlen kár és a határidős kockázat jelentősen csökkent."
+      : "Az ügy gyors, érdemi kezelést kapott. A közvetlen kár és a határidős kockázat jelentősen csökkent.";
   } else if (modeId === "stabilize") {
     delta.trust += card.urgency >= 3 ? 1 : 0;
     delta.fairness += card.fairness >= 3 ? 1 : 0;
     delta.stability += 1;
-    delta.risk += card.systemic >= 2 ? 1 : 0;
     text = card.systemic >= 2
       ? "A legsürgősebb következményt sikerült fékezni, de a rendszerszintű ok megmaradt. A kérdés egy későbbi fordulóban vagy a valós működésben visszatérhet."
-      : "A csapat időt nyert és csökkentette az azonnali kárt, de a végleges megoldás és annak felelőse még nincs teljesen rendezve."
+      : "A csapat időt nyert és csökkentette az azonnali kárt, de a végleges megoldás és annak felelőse még nincs teljesen rendezve.";
   } else if (modeId === "delegate") {
     delta.fairness += card.fairness >= 3 ? -1 : 0;
     delta.stability += card.coordination <= 1 ? 1 : 0;
     delta.learning += card.systemic >= 3 ? -1 : 0;
-    delta.risk += card.urgency >= 3 ? 2 : 1;
     text = card.coordination >= 3
       ? "A bevont partner szakértelmet hozhat, de a sokszereplős koordináció miatt nőtt a gazdátlanság és a határidőcsúszás veszélye."
-      : "A delegálás tehermentesítette a csapatot. Az eredmény azon múlik, hogy a felelősség, a határidő és a visszacsatolás egyértelmű-e."
+      : "A delegálás tehermentesítette a csapatot. Az eredmény azon múlik, hogy a felelősség, a határidő és a visszacsatolás egyértelmű-e.";
   } else {
     delta.trust -= card.fairness >= 2 ? 2 : 1;
     delta.fairness -= card.fairness >= 2 ? 2 : 1;
     delta.stability -= card.urgency >= 2 ? 2 : 1;
     delta.learning -= card.systemic >= 2 ? 1 : 0;
-    delta.risk += card.urgency + card.systemic >= 5 ? 3 : 2;
     text = card.urgency >= 3
       ? "A beavatkozás elmaradt egy sürgős ügyben. A csapat megőrizte a kapacitását, de nőtt a visszafordíthatatlan kár és a bizalomvesztés esélye."
-      : "A csapat tudatosan más ügyeket helyezett előre. A halasztás rövid távon ingyenes volt, de felhalmozott kockázatot hagyott maga után."
+      : "A csapat tudatosan más ügyeket helyezett előre. A halasztás rövid távon ingyenes volt, de felhalmozott kockázatot hagyott maga után.";
   }
 
   const additions = [];
@@ -232,11 +290,9 @@ function outcomeFor(card, modeId, event) {
     additions.push("A nyilvánosság miatt a bizalomvesztés erősebb lett.");
   }
   if (event.id === "deadline_wave" && card.urgency >= 3 && modeId !== "resolve") {
-    delta.risk += 1;
     additions.push("A közelgő határidők tovább növelték a kockázatot.");
   }
   if (event.id === "partner_offer" && modeId === "delegate") {
-    delta.risk -= 1;
     additions.push("A felajánlott partner csökkentette a koordinációs kockázatot.");
   }
   if (event.id === "system_window" && modeId === "resolve" && card.systemic >= 2) {
@@ -248,7 +304,7 @@ function outcomeFor(card, modeId, event) {
     additions.push("A részletes dokumentálás erősítette a méltányosságot és az indokolhatóságot.");
   }
 
-  delta.risk = Math.max(-2, delta.risk);
+  delta.risk = riskContribution(card, modeId, event);
   return { delta, text: `${text}${additions.length ? ` ${additions.join(" ")}` : ""}` };
 }
 
@@ -259,19 +315,19 @@ function revealedRounds(meta) {
   return rounds;
 }
 
-function calculateMetrics(state, meta) {
+function calculateMetrics(state, meta, team) {
   const metrics = { trust: 5, fairness: 5, stability: 5, learning: 5, risk: 0 };
   const details = [];
-  const rounds = new Set(revealedRounds(meta));
 
-  Object.entries(state.decisions || {}).forEach(([cardId, decision]) => {
-    if (!rounds.has(Number(decision.round))) return;
-    const card = ALL_CASES[cardId];
-    if (!card) return;
-    const event = currentEvent(meta, Number(decision.round));
-    const outcome = outcomeFor(card, decision.mode, event);
-    Object.entries(outcome.delta).forEach(([key, value]) => { metrics[key] += value; });
-    details.push({ card, decision, event, outcome });
+  revealedRounds(meta).forEach((round) => {
+    const event = currentEvent(meta, round);
+    activeRoundDecisions(state, meta, team, round).forEach((decision) => {
+      const card = ALL_CASES[decision.cardId];
+      if (!card) return;
+      const outcome = outcomeFor(card, decision.mode, event);
+      Object.entries(outcome.delta).forEach(([key, value]) => { metrics[key] += value; });
+      details.push({ card, decision: { ...decision, round }, event, outcome });
+    });
   });
 
   ["trust", "fairness", "stability", "learning"].forEach((key) => {
@@ -527,7 +583,7 @@ function renderDecisionBoard() {
     zone.className = "decision-zone";
     zone.dataset.mode = mode.id;
 
-    const cards = roundCases(teamId, playerMeta.round)
+    const cards = activeCases(teamId, playerMeta.round, playerMeta)
       .filter((card) => decisions[card.id]?.mode === mode.id);
     const zoneCost = cards.reduce((sum, card) => sum + decisionCost(card, mode.id, event), 0);
 
@@ -581,7 +637,7 @@ function renderDecisionBoard() {
 function renderCaseHand() {
   const hand = $("#caseHand");
   hand.innerHTML = "";
-  const undecided = roundCases(teamId, playerMeta.round)
+  const undecided = activeCases(teamId, playerMeta.round, playerMeta)
     .filter((card) => !playerState.decisions?.[card.id]);
 
   if (!undecided.length) {
@@ -614,7 +670,7 @@ function renderPlayer() {
   $("#roundNumber").textContent = `${playerMeta.round}.`;
   $("#phaseLabel").textContent = phaseLabel(playerMeta.phase);
   const max = availableCapacity(playerMeta);
-  const used = usedCapacity(playerState, playerMeta);
+  const used = usedCapacity(playerState, playerMeta, teamId);
   $("#capacityMax").textContent = max;
   $("#capacityLeft").textContent = Math.max(0, max - used);
   const barFill = $("#capacityBarFill");
@@ -624,6 +680,7 @@ function renderPlayer() {
     barFill.style.width = `${Math.round(ratio * 100)}%`;
     bar.classList.toggle("over", used > max);
   }
+  renderRiskMeter();
   renderEventBanner($("#eventBanner"), currentEvent(playerMeta));
   syncRoleFields();
   renderCaseHand();
@@ -649,13 +706,28 @@ function renderPlayer() {
   renderOutcomePanel();
 }
 
+function renderRiskMeter() {
+  const valueEl = $("#riskValue");
+  if (!valueEl) return;
+  const risk = roundRisk(playerState, playerMeta, teamId);
+  const worst = worstRoundRisk(playerMeta, teamId);
+  const level = riskLevel(risk, worst);
+  valueEl.textContent = risk;
+  const fill = $("#riskBarFill");
+  if (fill) fill.style.width = `${worst > 0 ? Math.round(Math.min(1, risk / worst) * 100) : 0}%`;
+  const box = $(".risk-box");
+  if (box) box.className = `risk-box level-${level.cls}`;
+  const levelEl = $("#riskLevel");
+  if (levelEl) levelEl.textContent = level.label;
+}
+
 function renderOutcomePanel() {
   const panel = $("#outcomePanel");
   const visible = ["reveal", "finished"].includes(playerMeta.phase);
   panel.classList.toggle("hidden", !visible);
   if (!visible) return;
 
-  const { metrics, details } = calculateMetrics(playerState, playerMeta);
+  const { metrics, details } = calculateMetrics(playerState, playerMeta, teamId);
   const currentDetails = details.filter((item) => Number(item.decision.round) === Number(playerMeta.round));
   panel.innerHTML = "";
 
@@ -724,11 +796,11 @@ async function savePlayerState(successMessage = "") {
 async function moveDecision(cardId, modeId) {
   if (!playerEditable()) return showToast("A forduló jelenleg nem szerkeszthető.", "error");
   const card = ALL_CASES[cardId];
-  if (!card || card.round !== playerMeta.round || !(CASES[teamId] || []).some((item) => item.id === cardId)) return;
+  if (!card || !activeIds(playerMeta, playerMeta.round, teamId).includes(cardId)) return;
 
   const draft = clone(playerState);
   draft.decisions[cardId] = { mode: modeId, round: playerMeta.round };
-  const projected = usedCapacity(draft, playerMeta);
+  const projected = usedCapacity(draft, playerMeta, teamId);
   if (projected > availableCapacity(playerMeta)) {
     return showToast(`Ehhez a döntéshez még ${projected - availableCapacity(playerMeta)} kapacitáspont hiányzik.`, "error");
   }
@@ -750,10 +822,10 @@ async function removeDecision(cardId) {
 async function submitTeam() {
   if (playerMeta.phase !== "planning") return;
   const draft = clone(playerState);
-  roundCases(teamId, playerMeta.round).forEach((card) => {
+  activeCases(teamId, playerMeta.round, playerMeta).forEach((card) => {
     if (!draft.decisions[card.id]) draft.decisions[card.id] = { mode: "defer", round: playerMeta.round };
   });
-  if (usedCapacity(draft, playerMeta) > availableCapacity(playerMeta)) {
+  if (usedCapacity(draft, playerMeta, teamId) > availableCapacity(playerMeta)) {
     return showToast("A döntési csomag túllépi a kapacitáskeretet.", "error");
   }
   draft.submitted[playerMeta.round] = true;
@@ -879,7 +951,10 @@ async function goMaster() {
     masterMeta = normalizeMeta(value);
     if (!value && !metaInitialized) {
       metaInitialized = true;
-      await store.set(`games/${room}/meta`, masterMeta);
+      const init = defaultMeta();
+      init.hands = { 1: initialHands(1) };
+      masterMeta = normalizeMeta(init);
+      await store.set(`games/${room}/meta`, init);
     }
     renderMaster();
   }));
@@ -925,14 +1000,15 @@ function buildMasterTabs() {
 
 function teamRoundStats(teamIdValue) {
   const state = masterStates[teamIdValue] || defaultTeamState();
-  const decisions = roundDecisions(state, masterMeta.round);
+  const decisions = activeRoundDecisions(state, masterMeta, teamIdValue, masterMeta.round);
   const counts = Object.fromEntries(DECISION_MODES.map((mode) => [mode.id, 0]));
   decisions.forEach((decision) => { if (counts[decision.mode] !== undefined) counts[decision.mode] += 1; });
   return {
     state,
     decisions,
     counts,
-    used: usedCapacity(state, masterMeta),
+    used: usedCapacity(state, masterMeta, teamIdValue),
+    risk: roundRisk(state, masterMeta, teamIdValue),
     ready: Boolean(state.submitted?.[masterMeta.round]),
   };
 }
@@ -968,7 +1044,7 @@ function renderMasterSummary() {
   box.innerHTML = "";
   TEAMS.forEach((team) => {
     const stats = teamRoundStats(team.id);
-    const { metrics } = calculateMetrics(stats.state, masterMeta);
+    const { metrics } = calculateMetrics(stats.state, masterMeta, team.id);
     const card = document.createElement("article");
     card.className = "summary-card";
     card.style.borderColor = `color-mix(in srgb, ${team.color} 48%, var(--line))`;
@@ -983,7 +1059,7 @@ function renderMasterSummary() {
     [
       ["Kapacitás", `${stats.used}/${availableCapacity(masterMeta)}`],
       ["Bizalom", `${metrics.trust}/10`],
-      ["Kockázat", metrics.risk],
+      ["Kockázat", stats.risk],
     ].forEach(([label, value]) => {
       const item = document.createElement("span");
       const valueElement = document.createElement("b");
@@ -1013,7 +1089,7 @@ function renderMasterContent() {
 
 function makeMasterTeamCard(team, detailed) {
   const stats = teamRoundStats(team.id);
-  const { metrics, details } = calculateMetrics(stats.state, masterMeta);
+  const { metrics, details } = calculateMetrics(stats.state, masterMeta, team.id);
   const card = document.createElement("article");
   card.className = "master-team-card";
 
@@ -1028,14 +1104,16 @@ function makeMasterTeamCard(team, detailed) {
   titleWrap.append(title, subtitle);
   const risk = document.createElement("span");
   risk.className = "status-chip";
-  risk.textContent = `Kockázat: ${metrics.risk}`;
+  risk.textContent = `Kockázat: ${stats.risk}`;
   head.append(titleWrap, risk);
 
   const list = document.createElement("div");
   list.className = "master-decision-list";
   const cards = detailed
-    ? (CASES[team.id] || []).filter((caseItem) => stats.state.decisions?.[caseItem.id])
-    : roundCases(team.id, masterMeta.round);
+    ? revealedRounds(masterMeta).concat(masterMeta.round)
+        .filter((round, index, arr) => arr.indexOf(round) === index)
+        .flatMap((round) => activeCases(team.id, round, masterMeta))
+    : activeCases(team.id, masterMeta.round, masterMeta);
 
   cards.forEach((caseItem) => {
     const decision = stats.state.decisions?.[caseItem.id];
@@ -1110,12 +1188,59 @@ async function saveMeta(nextMeta, message = "") {
   }
 }
 
+function pickRandomIndexes(length, count) {
+  const indexes = Array.from({ length }, (_, i) => i);
+  for (let i = indexes.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indexes[i], indexes[j]] = [indexes[j], indexes[i]];
+  }
+  return indexes.slice(0, count);
+}
+
+function swapHand(active, reserve, count) {
+  const n = Math.min(count, active.length, reserve.length);
+  if (n <= 0) return active.slice();
+  const outIdx = new Set(pickRandomIndexes(active.length, n));
+  const inIdx = pickRandomIndexes(reserve.length, n);
+  const kept = active.filter((_, i) => !outIdx.has(i));
+  inIdx.forEach((i) => kept.push(reserve[i]));
+  return kept;
+}
+
 async function applyEvent() {
   if (masterMeta.phase !== "planning") return;
   const next = clone(masterMeta);
+  const eventId = $("#eventSelect").value;
+  const round = next.round;
   next.events ||= {};
-  next.events[next.round] = $("#eventSelect").value;
-  await saveMeta(next, "Az esemény minden csapatnál megjelent.");
+  next.events[round] = eventId;
+  next.hands ||= {};
+
+  const swapped = eventId !== "none";
+  if (swapped) {
+    next.hands[round] ||= {};
+    TEAMS.forEach((team) => {
+      const current = activeIds(next, round, team.id);
+      const reserve = roundPool(team.id, round).filter((id) => !current.includes(id));
+      next.hands[round][team.id] = swapHand(current, reserve, SWAP_ON_EVENT);
+    });
+  }
+
+  await saveMeta(next, swapped
+    ? "Az esemény megjelent, és minden csapatnál lecserélt néhány ügyet. Kezdődhet az újraértékelés!"
+    : "Az esemény minden csapatnál megjelent.");
+
+  // Csere után visszaáll a véglegesítés, hogy a csapatok az új helyzetet döntsék le.
+  if (swapped) {
+    await Promise.all(TEAMS
+      .filter((team) => masterStates[team.id]?.submitted?.[round])
+      .map((team) => {
+        const teamState = clone(masterStates[team.id]);
+        teamState.submitted = { ...(teamState.submitted || {}), [round]: false };
+        teamState.updatedAt = Date.now();
+        return store.set(`games/${room}/teams/${team.id}`, teamState);
+      }));
+  }
 }
 
 async function revealConsequences() {
@@ -1135,6 +1260,8 @@ async function nextRound() {
     next.phase = "planning";
     next.events ||= {};
     if (!next.events[next.round]) next.events[next.round] = "none";
+    next.hands ||= {};
+    next.hands[next.round] = initialHands(next.round);
     await saveMeta(next, `${next.round}. forduló elindítva.`);
   } else {
     next.phase = "finished";
@@ -1144,8 +1271,10 @@ async function nextRound() {
 
 async function resetRoom() {
   if (!confirm("Biztosan törlöd a szoba összes döntését, szerepét és eredményét? Ez nem vonható vissza.")) return;
+  const fresh = defaultMeta();
+  fresh.hands = { 1: initialHands(1) };
   await Promise.all([
-    store.set(`games/${room}/meta`, defaultMeta()),
+    store.set(`games/${room}/meta`, fresh),
     ...TEAMS.map((team) => store.set(`games/${room}/teams/${team.id}`, null)),
   ]);
   masterView = "all";
@@ -1164,7 +1293,7 @@ function buildTeamSelect() {
     button.type = "button";
     button.className = "team-btn";
     button.style.setProperty("--team-color", team.color);
-    button.innerHTML = `<span>${index + 1}. csapat</span><b>${team.name}</b><small>8 eset · 3 forduló · saját döntési portfólió</small>`;
+    button.innerHTML = `<span>${index + 1}. csapat</span><b>${team.name}</b><small>fordulónként 5 aktív ügy · 3 forduló · rotáló tartalék</small>`;
     button.addEventListener("click", () => startGame(team.id));
     box.appendChild(button);
   });

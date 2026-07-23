@@ -19,6 +19,17 @@
               ".validate": "$round.matches(/^[1-3]$/) && newData.isString() && newData.val().matches(/^(none|capacity_cut|public_attention|deadline_wave|partner_offer|system_window|legal_review|staff_absence)$/)"
             }
           },
+          "hands": {
+            "$round": {
+              ".validate": "$round.matches(/^[1-3]$/)",
+              "$team": {
+                ".validate": "$team.matches(/^team[1-4]$/)",
+                "$index": {
+                  ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,64}$/)"
+                }
+              }
+            }
+          },
           "updatedAt": {
             ".validate": "newData.isNumber()"
           },

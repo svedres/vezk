@@ -93,6 +93,11 @@
           <b id="capacityLeft">12</b><small>/ <span id="capacityMax">12</span></small>
           <div class="capacity-bar"><i id="capacityBarFill"></i></div>
         </div>
+        <div class="risk-box level-none" aria-live="polite" title="A vállalt kockázatot a sürgősség és a méltányosság súlyozza.">
+          <span>Felhalmozott kockázat</span>
+          <b id="riskValue">0</b><small id="riskLevel">nincs</small>
+          <div class="risk-bar"><i id="riskBarFill"></i></div>
+        </div>
         <button class="back-btn small" data-back type="button">Kilépés</button>
       </div>
 
@@ -205,10 +210,11 @@
         <div class="rm"><b>⇄ Delegáljuk</b><span>1 pont · koordinációs kockázat</span></div>
         <div class="rm"><b>! Vállaljuk a kockázatot</b><span>0 pont · marad a következmény</span></div>
       </div>
+      <p class="helper">A fejlécben két mérő van: a <b>szabad kapacitás</b> (mennyit tudtok érdemben kezelni) és a <b>felhalmozott kockázat</b>, amelyet a sürgősség és a méltányosság súlyoz. Nem oldhattok meg mindent — a jó döntés a védhető kompromisszum.</p>
 
       <h3 class="rules-subhead">A forduló menete</h3>
       <ol class="rules-list">
-        <li><b>Osszátok ki a szerepeket</b>, és nézzétek meg a forduló eseményét — az módosíthatja a keretet vagy egyes döntések hatását.</li>
+        <li><b>Osszátok ki a szerepeket</b>, és nézzétek meg a forduló eseményét — az módosíthatja a keretet, sőt <b>le is cserélhet néhány ügyet</b>, amelyet az új helyzetben újra kell értékelnetek.</li>
         <li><b>Húzzátok az ügyeket</b> a négy döntési zóna egyikébe (telefonon kattints a kártyára). A szabad kapacitás fogy, a keret fölé nem mehettek.</li>
         <li><b>Véglegesítsétek</b> a teljes döntési csomagot. A ki nem osztott ügyek automatikusan a „Vállaljuk a kockázatot” zónába kerülnek.</li>
         <li><b>Nézzétek meg a következményeket</b>, amikor a játékmester felfedi őket — ezek vitaindítók, nem egyetlen „helyes válasz”.</li>
