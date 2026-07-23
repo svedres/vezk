@@ -158,17 +158,11 @@ function availableCapacity(meta) {
   return Math.max(0, (ROUND_CAPACITY[meta.round] || 0) + currentEvent(meta).capacityModifier);
 }
 
-function decisionCost(card, modeId, event) {
-  let cost;
-  if (modeId === "resolve") cost = card.capacity;
-  else if (modeId === "stabilize") cost = Math.max(1, Math.ceil(card.capacity / 2));
-  else if (modeId === "delegate") cost = 1;
-  else cost = 0;
-
-  if (event.id === "partner_offer" && modeId === "delegate") cost = 0;
-  if (event.id === "system_window" && modeId === "resolve" && card.systemic >= 2) cost = Math.max(1, cost - 1);
-  if (event.id === "legal_review" && ["resolve", "stabilize"].includes(modeId) && card.fairness >= 2) cost += 1;
-  return cost;
+// Bármelyik AKTÍV döntés (megoldás/stabilizálás/delegálás) a kártya teljes
+// kapacitásigényébe kerül — a mutatott szám mindig ennyi. Csak a bevállalás 0.
+// A módok nem az árban, hanem a kockázatban és a következményben térnek el.
+function decisionCost(card, modeId) {
+  return modeId === "defer" ? 0 : card.capacity;
 }
 
 // ---- Aktív kéz és tartalék kezelése ----
@@ -208,7 +202,7 @@ function usedCapacity(state, meta, team, round = meta.round) {
   const event = currentEvent(meta, round);
   return activeRoundDecisions(state, meta, team, round).reduce((sum, decision) => {
     const card = ALL_CASES[decision.cardId];
-    return card ? sum + decisionCost(card, decision.mode, event) : sum;
+    return card ? sum + decisionCost(card, decision.mode) : sum;
   }, 0);
 }
 
@@ -503,7 +497,7 @@ function makeCaseCard(card, compact = false) {
   title.textContent = card.name;
   const round = document.createElement("span");
   round.className = "card-round";
-  round.textContent = `${card.round}. forduló · érdemi kezelés: ${card.capacity} pont`;
+  round.textContent = `${card.round}. forduló · kezelés: ${card.capacity} pont`;
   titleWrap.append(title, round);
   top.append(cost, titleWrap);
 
@@ -555,8 +549,7 @@ function makeZoneCard(card, decision) {
   element.className = "zone-card";
   element.style.setProperty("--team-color", currentTeamColor());
   element.tabIndex = 0;
-  const event = currentEvent(playerMeta);
-  const cost = decisionCost(card, decision.mode, event);
+  const cost = decisionCost(card, decision.mode);
   const title = document.createElement("strong");
   title.textContent = card.name;
   const meta = document.createElement("span");
@@ -575,7 +568,6 @@ function makeZoneCard(card, decision) {
 function renderDecisionBoard() {
   const board = $("#decisionBoard");
   board.innerHTML = "";
-  const event = currentEvent(playerMeta);
   const decisions = playerState.decisions || {};
 
   DECISION_MODES.forEach((mode) => {
@@ -585,7 +577,7 @@ function renderDecisionBoard() {
 
     const cards = activeCases(teamId, playerMeta.round, playerMeta)
       .filter((card) => decisions[card.id]?.mode === mode.id);
-    const zoneCost = cards.reduce((sum, card) => sum + decisionCost(card, mode.id, event), 0);
+    const zoneCost = cards.reduce((sum, card) => sum + decisionCost(card, mode.id), 0);
 
     const head = document.createElement("div");
     head.className = "zone-head";
@@ -859,7 +851,7 @@ function openCaseModal(cardId) {
   const titleWrap = document.createElement("div");
   const eyebrow = document.createElement("span");
   eyebrow.className = "eyebrow";
-  eyebrow.textContent = `${card.round}. forduló · eredeti kapacitásigény`;
+  eyebrow.textContent = `${card.round}. forduló · kezelés kapacitásigénye`;
   const title = document.createElement("h2");
   title.id = "modalTitle";
   title.textContent = card.name;
@@ -896,7 +888,7 @@ function openCaseModal(cardId) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "mode-option";
-      const cost = decisionCost(card, mode.id, event);
+      const cost = decisionCost(card, mode.id);
       button.innerHTML = `<strong><span>${mode.icon} ${mode.label}</span><span class="mode-cost">${cost} pont</span></strong><span>${mode.description}</span>`;
       button.addEventListener("click", () => moveDecision(card.id, mode.id));
       options.appendChild(button);
@@ -1124,7 +1116,7 @@ function makeMasterTeamCard(team, detailed) {
     const desc = document.createElement("span");
     if (!decision) desc.textContent = "Még nincs döntés";
     else {
-      const cost = decisionCost(caseItem, decision.mode, currentEvent(masterMeta, Number(decision.round)));
+      const cost = decisionCost(caseItem, decision.mode);
       desc.textContent = `${decision.round}. kör · ${modeById(decision.mode)?.label || decision.mode} · ${cost} pont`;
     }
     row.append(label, desc);
